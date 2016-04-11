@@ -2,10 +2,7 @@ var express = require('express');
 var bodyParser = require('body-parser');
 var _ = require('underscore');
 var db = require('./db.js');
-var bcrypt = require('bcryptjs');
 var middleware = require('./middleware.js')(db);
-var jsreport = require('jsreport');
-var dateFormat = require('dateformat');
 var app = express();
 var PORT = process.env.PORT || 3000;
 var courses = [];
@@ -67,7 +64,7 @@ app.post('/users/login', function (req, res) {
 });
 
 
-//Add Courses
+//Add Courses API
 app.post('/courses', middleware.requireAuthentication, function(req, res) {
 	var body = _.pick(req.body, 'courseName','courseModules');
 	if(req.user.userRole =='Admin'){
@@ -199,12 +196,12 @@ app.delete('/course/assigned/:id', middleware.requireAuthentication, function(re
 			}
 		}).then(function(rowsDeleted) {
 		if (rowsDeleted === 0) {
-			res.send(404, {status:404, message: 'No course assigned with id', type:'internal'});
+			res.status(404).send('No course assigned with id');
 		} else {
 			res.send('Course assigned to user with : ' + courseId + '  is  Deleted');
 			}
 		}, function() {
-		res.status(500).send();
+		res.status(500).send('Cannot find the id may be it is already Deleted!!!');
 		});
 	}
 	else{
@@ -217,8 +214,8 @@ app.delete('/course/assigned/:id', middleware.requireAuthentication, function(re
 //Find Courses Assigned to user
 app.get('/course/assigned/:userName', middleware.requireAuthentication, function(req, res) {
 	var userName = req.params.userName;
-
-	db.course_user.findAll({
+    if(req.user.userName === userName){
+    	db.course_user.findAll({
 		where: {
 			userName: userName,
 		}
@@ -231,10 +228,14 @@ app.get('/course/assigned/:userName', middleware.requireAuthentication, function
 	}, function(e) {
 		res.status(500).send('Invalid UserName specified');
 	});
+} else{
+	res.status(404).send('Cannot view courses')
+}
+	
 });
 
 
-//Find SubSections with Date
+//Find SubSections with id
 app.get('/course/subSections/:id', middleware.requireAuthentication, function(req, res) {
 	var subsecId = parseInt(req.params.id, 10);
 
@@ -245,7 +246,7 @@ app.get('/course/subSections/:id', middleware.requireAuthentication, function(re
 	}).then(function(course) {
 		if (!!course) {
 			res.json(course);
-		} else {
+		} else if(course) {
 			res.status(404).send('Cannot find any course assigned to user!!!');
 		}
 	}, function(e) {
@@ -280,7 +281,7 @@ app.put('/course/assigned/:id', middleware.requireAuthentication, function(req, 
 			res.status(404).send('Course Not Found Or You are not authorized to change startDate and endDate!!!!');
 		}
 	}, function() {
-		res.status(500).send();
+		res.status(500).send('Not able to process your request');
 	});
 });
 
@@ -308,7 +309,7 @@ app.put('/course/subSections/:id', middleware.requireAuthentication, function(re
 			res.status(404).send('Sub Section not found Or You are not authorized to add comments!!!!');
 		}
 	}, function() {
-		res.status(500).send();
+		res.status(500).send('Not able to process your request!!');
 	});
 });
 
@@ -336,7 +337,7 @@ app.put('/course/completed/:id', middleware.requireAuthentication, function(req,
 			res.status(404).send('Sub Section not found Or You are not authorized to add completed flag!!!');
 		}
 	}, function() {
-		res.status(500).send();
+		res.status(500).send('Not able to process your request!!');
 	});
 });
 
@@ -345,6 +346,7 @@ app.put('/course/completed/:id', middleware.requireAuthentication, function(req,
 app.get('/course/completed/:courseName', middleware.requireAuthentication, function(req, res) {
 	var courseName = req.params.courseName;
 	var count ={};
+	var percent;
 	db.course_subsections.count({
 		where: {
 			courseName: courseName,
@@ -357,7 +359,7 @@ app.get('/course/completed/:courseName', middleware.requireAuthentication, funct
 			}
 			}).then(function(completeCount){
 				if(completeCount){
-					var percent = (completeCount*100)/count;
+					percent = (completeCount*100)/count;
 					res.send('Course Completed  %    ' + percent);
 				}
 			})
@@ -369,6 +371,9 @@ app.get('/course/completed/:courseName', middleware.requireAuthentication, funct
 
 	});
 
+
+	
+	
 });
 
 
@@ -423,7 +428,6 @@ app.get('/course/:courseName/:userName', middleware.requireAuthentication, funct
 	
 });
 
-
 //Viewing Reports of particular user
 app.get('/course/:userName', middleware.requireAuthentication, function(req, res) {
 	var courseUser = req.params.userName;
@@ -443,30 +447,21 @@ app.get('/course/:userName', middleware.requireAuthentication, function(req, res
 	
 });
 
-/*//Viewing Reports of All Users
+//Viewing Reports of All Users
 app.get('/courses/all', middleware.requireAuthentication, function(req, res) {
-	db.course_user.findAll({
-		attributes:['userName']
-	}).then(function (userName){
-		if(userName){
-			var arr = JSON.stringify(userName);
-			
-			arr.forEach(function(e) {
-			Object.keys(e).forEach(function(key) {
-			var value = e[key]
-			console.log(key)
-			console.log(value)
-			})
-			})
-		}
-		else{
-			res.status(404).send('User not found with any assigned course');
-		}
-	});
+	db.sequelize.query("SELECT * FROM `course_users`", { type: db.sequelize.QueryTypes.SELECT})
+    .then(function(users) {
+    	if(users){
+    		res.json(users);
+    	}else{
+    		res.status(404).send('Not able to find the users');
+    	}
+    	
+    });
 	
-});*/
+});
 
-db.sequelize.sync().then(function() {
+db.sequelize.sync({force:true}).then(function() {
 	app.listen(PORT, function() {
 		console.log('Express listening on port ' + PORT + '!');
 	});

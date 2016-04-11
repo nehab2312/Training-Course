@@ -20,6 +20,7 @@ db.course_subsections = sequelize.import(__dirname + '/models/course_subsections
 db.course_user = sequelize.import(__dirname + '/models/course_user.js');
 db.user = sequelize.import(__dirname + '/models/user.js');
 db.token = sequelize.import(__dirname + '/models/token.js');
+
 db.sequelize = sequelize;
 db.Sequelize = Sequelize;
 
